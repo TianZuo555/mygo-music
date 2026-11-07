@@ -106,8 +106,18 @@ export function browse({ page }) {
   return {
     title: t("Discover"),
     subtitle: t("Anything a plugin wants to show"),
-    sections: [{ title: t("Artists"), artists: [artist] }, { title: t("Everything"), tracks }],
+    sections: [
+      { title: t("Artists"), artists: [artist] },
+      { title: t("Everything"), tracks },
+      // What this holds comes as the page scrolls it near, by section below.
+      { title: t("Podcasts"), id: "podcasts", lazy: true },
+    ],
   };
+}
+// A lazy section is filled when the page scrolls it near, by the section's id.
+export function section({ section }) {
+  if (section !== "podcasts") throw fail("unavailable", "no such section");
+  return { shows: [show] };
 }
 
 // Search.

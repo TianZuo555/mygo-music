@@ -86,6 +86,19 @@ func (p *Plugin) Browse(page string) (*music.Browse, error) {
 	return &b, nil
 }
 
+// Section fills a lazy section of a page as the page scrolls it near.
+func (p *Plugin) Section(page, section string) (*music.Section, error) {
+	var s music.Section
+	if err := p.call("section", map[string]string{"page": page, "section": section}, &s); err != nil {
+		return nil, err
+	}
+	p.stamp(s.Tracks)
+	for i := range s.Playlists {
+		p.stamp(s.Playlists[i].Tracks)
+	}
+	return &s, nil
+}
+
 func (p *Plugin) Playlists() ([]music.Playlist, error) {
 	var ps []music.Playlist
 	if err := p.call("playlists", nil, &ps); err != nil {

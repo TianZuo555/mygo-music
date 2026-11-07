@@ -51,7 +51,7 @@ func (a *app) homePage(c *ui.Context) {
 	now := c.Now()
 	lib := a.library
 	if lib.home != nil && len(lib.home.Sections) > 0 {
-		a.browseRows(c, lib.home, "", func(c *ui.Context) { a.homeHello(c, now) })
+		a.browseRows(c, lib, lib.home, "", func(c *ui.Context) { a.homeHello(c, now) })
 		return
 	}
 	loading := lib.homeLoading || !lib.started || lib.accountUnknown()

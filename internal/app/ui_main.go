@@ -469,7 +469,7 @@ func (a *app) loadHome(lib *library) {
 		a.post(func() {
 			lib.homeLoading = false
 			lib.home, lib.recent = home, recent
-			lib.homeAt = at
+			lib.homeAt, lib.homeSections = at, nil
 			switch {
 			case homeErr != nil:
 				lib.homeErr = a.problem(lib, homeErr, T("Couldn't load this page"))

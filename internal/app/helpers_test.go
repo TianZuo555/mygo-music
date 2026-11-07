@@ -75,6 +75,7 @@ type fakeSource struct {
 	recent      func() ([]music.Track, error)
 	home        func() (*music.Browse, error)
 	browse      func(page string) (*music.Browse, error)
+	section     func(page, section string) (*music.Section, error)
 	isLiked     func(ids []string) (map[string]bool, error)
 	like        func(id string, on bool) error
 	likeEpisode func(id string, on bool) error
@@ -199,6 +200,12 @@ func (s *fakeSource) Browse(page string) (*music.Browse, error) {
 		return nil, music.ErrUnsupported
 	}
 	return s.browse(page)
+}
+func (s *fakeSource) Section(page, section string) (*music.Section, error) {
+	if s.section == nil {
+		return nil, music.ErrUnsupported
+	}
+	return s.section(page, section)
 }
 func (s *fakeSource) IsLiked(ids []string) (map[string]bool, error) {
 	if s.isLiked == nil {

@@ -77,11 +77,12 @@ type library struct {
 	likedAt    time.Time // when the liked songs' first page was asked for
 	likedFresh bool      // it's being asked for anew
 
-	recent      []music.Track
-	home        *music.Browse // the source's own Home
-	homeErr     string
-	homeLoading bool
-	homeAt      time.Time // when what the home page shows was asked for
+	recent       []music.Track
+	home         *music.Browse // the source's own Home
+	homeErr      string
+	homeLoading  bool
+	homeAt       time.Time            // when what the home page shows was asked for
+	homeSections map[int]*sectionLoad // Home's lazy sections, as they come
 
 	playlists map[string]*music.Playlist
 	loadingPl map[string]bool
@@ -126,6 +127,7 @@ func (l *library) forget() {
 	l.albums = map[string]*albumData{}
 	l.shows = map[string]*showData{}
 	l.browses = map[string]*browseData{}
+	l.homeSections = nil
 	l.searches = map[route]*searchData{}
 	l.liked = nil
 	l.likedList, l.likedPaged, l.likedAt = nil, paged{}, time.Time{}

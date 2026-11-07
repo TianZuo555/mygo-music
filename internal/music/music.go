@@ -219,6 +219,18 @@ type Section struct {
 	// Subtitle follows the count of songs on that page, such as "Picked for
 	// your taste, new every day at 6:00".
 	Subtitle string `json:"subtitle,omitempty"`
+	// Lazy asks for this section only as the page scrolls it near, through
+	// SectionSource, rather than the whole page coming in one answer. It shows
+	// Empty, such as "Loading…", until then.
+	Lazy bool `json:"lazy,omitempty"`
+	// ID is what SectionSource knows the section as. Without it, its Title is.
+	ID string `json:"id,omitempty"`
+}
+
+// SectionSource is a source that fills a Lazy section of a page as it scrolls
+// near, rather than sending all of a long page at once.
+type SectionSource interface {
+	Section(page, section string) (*Section, error)
 }
 
 // Link opens another Browse page.

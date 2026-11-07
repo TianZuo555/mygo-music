@@ -18,10 +18,17 @@ import (
 
 // browseData is what the app has of a page, kept as it loads anew.
 type browseData struct {
-	page    *music.Browse
-	at      time.Time // when page came
-	loading bool
-	err     string
+	page     *music.Browse
+	at       time.Time // when page came
+	loading  bool
+	err      string
+	sections map[int]*sectionLoad // the lazy sections, as they come
+}
+
+// sectionLoad is how a lazy section of a page is coming.
+type sectionLoad struct {
+	busy bool
+	err  string
 }
 
 // loadBrowse loads a page, unless it has, or again. One loaded longer than
@@ -48,7 +55,7 @@ func (a *app) loadBrowse(lib *library, page string, again bool) {
 				d.err = a.problem(lib, err, T("Couldn't load this page"))
 				return
 			}
-			d.page, d.at = b, time.Now()
+			d.page, d.at, d.sections = b, time.Now(), nil
 		})
 	}()
 }
@@ -65,7 +72,80 @@ func (a *app) browsePage(c *ui.Context) {
 		a.trackSkeleton(c, a.pageShimmer(c), true, func(c *ui.Context) {})
 		return
 	}
-	a.browseRows(c, d.page, id, func(c *ui.Context) { a.browseHeader(c, d.page) })
+	a.browseRows(c, lib, d.page, id, func(c *ui.Context) { a.browseHeader(c, d.page) })
+}
+
+// loadSection asks the source for what a lazy section holds, as the page scrolls
+// it near. It asks once: what comes fills the section until the page loads anew.
+func (a *app) loadSection(lib *library, page string, at int) {
+	var b *music.Browse
+	var states *map[int]*sectionLoad
+	var gen time.Time
+	if page == "" {
+		b, gen, states = lib.home, lib.homeAt, &lib.homeSections
+	} else {
+		d := lib.browses[page]
+		if d == nil {
+			return
+		}
+		b, gen, states = d.page, d.at, &d.sections
+	}
+	if b == nil || at < 0 || at >= len(b.Sections) {
+		return
+	}
+	sec := &b.Sections[at]
+	if !sec.Lazy {
+		return
+	}
+	src, ok := lib.src.(music.SectionSource)
+	if !ok {
+		return
+	}
+	if *states == nil {
+		*states = map[int]*sectionLoad{}
+	}
+	if s := (*states)[at]; s != nil && (s.busy || s.err != "") {
+		return
+	}
+	key := sec.ID
+	if key == "" {
+		key = sec.Title
+	}
+	(*states)[at] = &sectionLoad{busy: true}
+	go func() {
+		filled, err := answered(src.Section(page, key))
+		a.post(func() {
+			// The page may have loaded anew while this came: what it holds now
+			// is for the section that was asked about, not this one.
+			if page == "" {
+				if lib.home == nil || !lib.homeAt.Equal(gen) {
+					return
+				}
+				b = lib.home
+			} else {
+				d := lib.browses[page]
+				if d == nil || d.page == nil || !d.at.Equal(gen) {
+					return
+				}
+				b = d.page
+			}
+			if at >= len(b.Sections) {
+				return
+			}
+			sec := &b.Sections[at]
+			if err != nil {
+				s := &sectionLoad{err: a.problem(lib, err, T("Couldn't load this section"))}
+				(*states)[at] = s
+				sec.Empty = s.err
+				return
+			}
+			sec.Tracks, sec.Albums, sec.Artists = filled.Tracks, filled.Albums, filled.Artists
+			sec.Playlists, sec.Shows, sec.Stations = filled.Playlists, filled.Shows, filled.Stations
+			sec.Links, sec.MorePage, sec.Empty = filled.Links, filled.MorePage, filled.Empty
+			sec.PageTitle, sec.Subtitle, sec.Lazy = filled.PageTitle, filled.Subtitle, false
+			delete(*states, at)
+		})
+	}()
 }
 
 // browseHeader heads a page the source made up: its title, and what it says
@@ -140,10 +220,12 @@ const (
 	rowStations
 	rowLinks
 	rowEmpty
+	rowLazy
 )
 
 // browseLayout lays out page in rows. The first section of Home, if tracks, is
-// the card that leads it.
+// the card that leads it. A lazy section keeps its heading and a row to load
+// into, until what it holds comes.
 func browseLayout(page *music.Browse, pageID string, cols int) []browseRow {
 	var rows []browseRow
 	cards := func(kind rowKind, s, n int) {
@@ -153,6 +235,13 @@ func browseLayout(page *music.Browse, pageID string, cols int) []browseRow {
 	}
 	for s := range page.Sections {
 		sec := &page.Sections[s]
+		if sec.Lazy {
+			if sec.Title != "" || sec.MorePage != "" {
+				rows = append(rows, browseRow{rowTitle, s, 0, 0})
+			}
+			rows = append(rows, browseRow{rowLazy, s, 0, 0})
+			continue
+		}
 		if s == 0 && pageID == "" && len(sec.Tracks) > 0 {
 			rows = append(rows, browseRow{rowFeature, s, 0, 0})
 			if len(sec.Albums)+len(sec.Artists)+len(sec.Playlists)+len(sec.Shows)+len(sec.Stations)+len(sec.Links) == 0 {
@@ -180,7 +269,7 @@ func browseLayout(page *music.Browse, pageID string, cols int) []browseRow {
 }
 
 // browseRows shows a page under a header, which scrolls with it.
-func (a *app) browseRows(c *ui.Context, page *music.Browse, pageID string, header func(c *ui.Context)) {
+func (a *app) browseRows(c *ui.Context, lib *library, page *music.Browse, pageID string, header func(c *ui.Context)) {
 	cols := a.columns(c, 156)
 	layout := browseLayout(page, pageID, cols)
 	top, bottom := a.insets(c)
@@ -215,6 +304,13 @@ func (a *app) browseRows(c *ui.Context, page *music.Browse, pageID string, heade
 			a.trackRow(c, sec.Tracks, r.from, true, "")
 		case rowEmpty:
 			ui.Column(c).Margin(0, 12, cardRowGap, 12).Children(func() { a.empty(c, sec.Empty) })
+		case rowLazy:
+			a.loadSection(lib, pageID, r.section)
+			label := sec.Empty
+			if label == "" {
+				label = T("Loading…")
+			}
+			ui.Column(c).Margin(0, 12, cardRowGap, 12).Children(func() { a.empty(c, label) })
 		default:
 			a.cardRow(c, sec, r, cols)
 		}

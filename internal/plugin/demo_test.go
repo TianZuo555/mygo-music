@@ -30,7 +30,7 @@ func TestDemoPluginDoesEverything(t *testing.T) {
 		}
 	}
 	for _, name := range []string{
-		"signIn", "signOut", "account", "setSetting", "home", "browse", "search", "suggest", "recent", "played",
+		"signIn", "signOut", "account", "setSetting", "home", "browse", "section", "search", "suggest", "recent", "played",
 		"liked", "isLiked", "like", "likeEpisode", "album", "artist", "saveAlbum", "savedAlbums", "followArtist", "playlists",
 		"playlist", "createPlaylist", "renamePlaylist", "deletePlaylist", "addToPlaylist", "removeFromPlaylist",
 		"movePlaylistTrack", "savePlaylist", "shows", "show", "subscribeShow", "stations", "stationNext", "comments",
@@ -60,6 +60,11 @@ func TestDemoPluginDoesEverything(t *testing.T) {
 	}
 	if b, err := p.Browse("discover"); err != nil || len(b.Sections) == 0 {
 		t.Errorf("browse: %+v, %v", b, err)
+	} else if !b.Sections[2].Lazy || b.Sections[2].ID != "podcasts" {
+		t.Errorf("browse's lazy section: %+v", b.Sections[2])
+	}
+	if s, err := p.Section("discover", "podcasts"); err != nil || len(s.Shows) != 1 || s.Shows[0].Name != "The Show" {
+		t.Errorf("section: %+v, %v", s, err)
 	}
 
 	if r, err := p.Search("song", music.SearchTracks, 0); err != nil || len(r.Tracks) != 3 {
